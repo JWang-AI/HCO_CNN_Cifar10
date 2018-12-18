@@ -1,5 +1,5 @@
 import numpy as np
-import cifar10_train as ct
+import cifar10_multi_gpu_train as ct
 import cifar10_eval as ce
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
@@ -11,7 +11,7 @@ dim = 7
 # convolution: feature map, pad, kernel size pool: max|average  kernel size
 pop_size = 10  # population size
 
-max_evaluation = 200
+max_evaluation = 1000
 run_time = 2
 max_flow = 3  # the max count of flow
 p_eva = 0.2  # evaporation probability
@@ -25,7 +25,7 @@ def hco():
         pop_pos = np.add(ld, np.multiply(pop_pos, np.subtract(ud, ld)))
         fitness = np.zeros(pop_size, dtype=float)  # initialize and calculate the fitness
         bndry_proce_pop(pop_pos)
-        calc_fitness_pop(pop_pos, fitness)
+        calc_fitness_pop(pop_pos, fitness, evaluation_now)
         best_index = np.argmax(fitness)  # get the index of the best performance individual
         evaluation_now += pop_size
 
@@ -46,13 +46,13 @@ def hco():
     fo.write(str(best_record))
 
 
-def calc_fitness_pop(pop_pos, fitness):
+def calc_fitness_pop(pop_pos, fitness, evaluation_now):
     # this function completes the flow operation
     # Args: pop_pos: population position, individual should be a row vector
     # return: fitness, a numpy array with [row,1] where row is the row of pop_pos
     # calculate the fitness for every individual
     for index, idv in enumerate(pop_pos):
-        fitness[index] = cal_fitness(idv)
+        fitness[index] = cal_fitness(idv, evaluation_now)
 
 
 def flow(pop_pos, fitness, best_index, evaluation_now):
@@ -77,7 +77,7 @@ def flow(pop_pos, fitness, best_index, evaluation_now):
             new_idv = idv + np.multiply(np.random.rand(col),
                                         np.subtract(pop_pos[flow_direction], idv))
             new_idv = bndry_proce(new_idv)
-            new_fitness = cal_fitness(new_idv)
+            new_fitness = cal_fitness(new_idv, evaluation_now)
             evaluation_now += 1
             # only update the fitness when the new individual perform better than the old one
             if new_fitness > fitness[index]:
@@ -114,7 +114,7 @@ def infiltration(pop_pos, fitness, evaluation_now):
         new_idv[dim_change[0:cnt_change]] += np.multiply(diff, np.random.rand(cnt_change)) * 2
         # new_fitness = objfun.train(new_idv)
         new_idv = bndry_proce(new_idv)
-        new_fitness = cal_fitness(new_idv)
+        new_fitness = cal_fitness(new_idv, evaluation_now)
         evaluation_now += 1
         if new_fitness > fitness[index]:
             pop_pos[index] = new_idv
@@ -146,7 +146,7 @@ def eva_and_precip(pop_pos, fitness, best_index, evaluation_now):
                 pop_pos[index, dim_change[0:cnt_change]] = np.multiply(pop_pos[index,
                                                                                dim_change[0:cnt_change]], gaussian)
         pop_pos[index] = bndry_proce(pop_pos[index])
-        fitness[index] = cal_fitness(pop_pos[index])
+        fitness[index] = cal_fitness(pop_pos[index], evaluation_now)
         evaluation_now += 1
 
         return evaluation_now
@@ -176,8 +176,9 @@ def sphere(idv):
     return np.sum(np.multiply(idv, idv))
 
 
-def cal_fitness(idv):
+def cal_fitness(idv, evaluation_now):
     ct.main(idv)
+    print(evaluation_now)
     return ce.evaluate(idv)
 
 

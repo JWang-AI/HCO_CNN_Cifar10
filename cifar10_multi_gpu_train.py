@@ -52,10 +52,10 @@ import cifar10
 
 FLAGS = tf.app.flags.FLAGS
 
-tf.app.flags.DEFINE_string('train_dir', '/tmp/cifar10_train',
+tf.app.flags.DEFINE_string('train_dir', '/Users/wangjun/Documents/study/Graduation_Project/HCOCNN/cifar10_train',
                            """Directory where to write event logs """
                            """and checkpoint.""")
-tf.app.flags.DEFINE_integer('max_steps', 1000000,
+tf.app.flags.DEFINE_integer('max_steps', 1000,
                             """Number of batches to run.""")
 tf.app.flags.DEFINE_integer('num_gpus', 1,
                             """How many GPUs to use.""")
@@ -137,7 +137,7 @@ def average_gradients(tower_grads):
     return average_grads
 
 
-def train():
+def train(idv):
     """Train CIFAR-10 for a number of steps."""
     with tf.Graph().as_default(), tf.device('/cpu:0'):
         # Create a variable to count the number of train() calls. This equals the
@@ -176,7 +176,7 @@ def train():
                         # Calculate the loss for one tower of the CIFAR model. This function
                         # constructs the entire CIFAR model but shares the variables across
                         # all towers.
-                        loss = tower_loss(scope, image_batch, label_batch)
+                        loss = tower_loss(scope, image_batch, label_batch, idv)
 
                         # Reuse variables for the next tower.
                         tf.get_variable_scope().reuse_variables()
@@ -266,12 +266,12 @@ def train():
                 saver.save(sess, checkpoint_path, global_step=step)
 
 
-def main(argv=None):  # pylint: disable=unused-argument
+def main(idv):  # pylint: disable=unused-argument
     cifar10.maybe_download_and_extract()
     if tf.gfile.Exists(FLAGS.train_dir):
         tf.gfile.DeleteRecursively(FLAGS.train_dir)
     tf.gfile.MakeDirs(FLAGS.train_dir)
-    train()
+    train(idv)
 
 
 if __name__ == '__main__':

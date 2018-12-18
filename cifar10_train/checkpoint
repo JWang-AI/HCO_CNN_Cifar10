@@ -1,3 +1,2 @@
-model_checkpoint_path: "/Users/wangjun/Documents/study/Graduation_Project/HCOCNN/cifar10_train/model.ckpt-10"
+model_checkpoint_path: "/Users/wangjun/Documents/study/Graduation_Project/HCOCNN/cifar10_train/model.ckpt-0"
 all_model_checkpoint_paths: "/Users/wangjun/Documents/study/Graduation_Project/HCOCNN/cifar10_train/model.ckpt-0"
-all_model_checkpoint_paths: "/Users/wangjun/Documents/study/Graduation_Project/HCOCNN/cifar10_train/model.ckpt-10"
