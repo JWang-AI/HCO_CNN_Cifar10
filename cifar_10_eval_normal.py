@@ -30,12 +30,9 @@ data set, compile the program and train the model.
 
 http://tensorflow.org/tutorials/deep_cnn/
 """
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
+
 
 import math
-import time
 from datetime import datetime
 
 import numpy as np
@@ -97,7 +94,7 @@ def eval_once(saver, top_k_op):
     return precision_rt
 
 
-def evaluate(idv):
+def evaluate():
     """Eval CIFAR-10 for a number of steps."""
     with tf.Graph().as_default() as g:
         # Get images and labels for CIFAR-10.
@@ -106,7 +103,7 @@ def evaluate(idv):
 
         # Build a Graph that computes the logits predictions from the
         # inference model.
-        logits = cifar10.inference_op(images, idv)
+        logits = cifar10.inference(images)
 
         # Calculate predictions.
         top_k_op = tf.nn.in_top_k(logits, labels, 1)
@@ -126,13 +123,13 @@ def evaluate(idv):
     return precision_rt
 
 
-def main(idv):  # pylint: disable=unused-argument
+def main():  # pylint: disable=unused-argument
     cifar10.maybe_download_and_extract()
     if tf.gfile.Exists(FLAGS.eval_dir):
         tf.gfile.DeleteRecursively(FLAGS.eval_dir)
     tf.gfile.MakeDirs(FLAGS.eval_dir)
-    return evaluate(idv)
+    return evaluate()
 
 
 if __name__ == '__main__':
-    tf.app.run()
+    main()

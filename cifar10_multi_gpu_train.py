@@ -55,7 +55,7 @@ FLAGS = tf.app.flags.FLAGS
 tf.app.flags.DEFINE_string('train_dir', '/Users/wangjun/Documents/study/Graduation_Project/HCOCNN/cifar10_train',
                            """Directory where to write event logs """
                            """and checkpoint.""")
-tf.app.flags.DEFINE_integer('max_steps', 1000,
+tf.app.flags.DEFINE_integer('max_steps', 10000,
                             """Number of batches to run.""")
 tf.app.flags.DEFINE_integer('num_gpus', 1,
                             """How many GPUs to use.""")
@@ -70,6 +70,7 @@ def tower_loss(scope, images, labels, idv):
       scope: unique prefix string identifying the CIFAR tower, e.g. 'tower_0'
       images: Images. 4D tensor of shape [batch_size, height, width, 3].
       labels: Labels. 1D tensor of shape [batch_size].
+      idv :  the super parameters vector
 
     Returns:
        Tensor of shape [] containing the total loss for a batch of data
@@ -235,7 +236,8 @@ def train(idv):
         sess.run(init)
 
         # Start the queue runners.
-        tf.train.start_queue_runners(sess=sess)
+        coord = tf.train.Coordinator()
+        threads = tf.train.start_queue_runners(sess=sess, coord=coord)
 
         summary_writer = tf.summary.FileWriter(FLAGS.train_dir, sess.graph)
 
@@ -264,9 +266,11 @@ def train(idv):
             if step % 1000 == 0 or (step + 1) == FLAGS.max_steps:
                 checkpoint_path = os.path.join(FLAGS.train_dir, 'model.ckpt')
                 saver.save(sess, checkpoint_path, global_step=step)
+        coord.request_stop()
+        coord.join(threads, stop_grace_period_secs=1)
 
 
-def main(idv):  # pylint: disable=unused-argument
+def main(idv):   # pylint: disable=unused-argument
     cifar10.maybe_download_and_extract()
     if tf.gfile.Exists(FLAGS.train_dir):
         tf.gfile.DeleteRecursively(FLAGS.train_dir)

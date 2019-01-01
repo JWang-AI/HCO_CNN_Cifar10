@@ -4,18 +4,21 @@ import cifar10_eval as ce
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 #  parameter setting
-ld = np.array([50, 50, 2, 2, 2, 2, 0])  # low boundary
-ud = np.array([180, 180, 7, 7, 7, 7, 1])  # up  boundary
-dim = 7
+ld = np.array([50, 50, 50, 2, 2, 2, 2, 2, 2, 0, 0, 0])  # low boundary
+ud = np.array([180, 180, 180, 7, 7, 7, 7, 7, 7, 1, 1, 1])  # up  boundary
+dim = 12
 # the num of parameter should be optimized
 # convolution: feature map, pad, kernel size pool: max|average  kernel size
-pop_size = 10  # population size
+pop_size = 15  # population size
 
-max_evaluation = 1000
+max_evaluation = 600
 run_time = 2
 max_flow = 3  # the max count of flow
 p_eva = 0.2  # evaporation probability
 best_record = []
+best_record_inter = []
+best_position = []
+best_position_inter = []
 
 
 def hco():
@@ -28,22 +31,40 @@ def hco():
         calc_fitness_pop(pop_pos, fitness, evaluation_now)
         best_index = np.argmax(fitness)  # get the index of the best performance individual
         evaluation_now += pop_size
+        best_record.append(fitness[best_index])
+        best_position.append(pop_pos[best_index])
 
         while evaluation_now <= max_evaluation:
-            best_fit = fitness[best_index]
-            best_record.append(best_fit)
             # execute the flow operation
+            best_record_inter.append(fitness[best_index])
+            best_position_inter.append(pop_pos[best_index])
             evaluation_now = flow(pop_pos, fitness, best_index, evaluation_now)
             # update the best index and position of population
             # execute the infiltration operation
-            evaluation_now = infiltration(pop_pos, fitness, evaluation_now)
             best_index = np.argmax(fitness)
+            best_record_inter.append(fitness[best_index])
+            best_position_inter.append(pop_pos[best_index])
+            #
+            evaluation_now = infiltration(pop_pos, fitness, evaluation_now)
+            #
+            best_index = np.argmax(fitness)
+            best_record_inter.append(fitness[best_index])
+            best_position_inter.append(pop_pos[best_index])
             # execute the evaporation and precipitation operation
             evaluation_now = eva_and_precip(pop_pos, fitness, best_index, evaluation_now)
             best_index = np.argmax(fitness)
-    print(best_record)
-    fo = open("/Users/wangjun/Documents/study/Graduation_Project/HCOCNN/result.txt", "w")
-    fo.write(str(best_record))
+    fo1 = open("/Users/wangjun/Documents/study/Graduation_Project/HCOCNN/result.txt", "w")
+    fo2 = open("/Users/wangjun/Documents/study/Graduation_Project/HCOCNN/result_inter.txt", "w")
+    fo3 = open("/Users/wangjun/Documents/study/Graduation_Project/HCOCNN/result_position.txt", "w")
+    fo4 = open("/Users/wangjun/Documents/study/Graduation_Project/HCOCNN/result_position_inter.txt", "w")
+    fo1.write(str(best_record))
+    fo2.write(str(best_record_inter))
+    fo3.write(str(best_position))
+    fo4.write(str(best_position_inter))
+    fo1.close()
+    fo2.close()
+    fo3.close()
+    fo4.close()
 
 
 def calc_fitness_pop(pop_pos, fitness, evaluation_now):
@@ -68,7 +89,7 @@ def flow(pop_pos, fitness, best_index, evaluation_now):
         while flow_time < max_flow:
             if fitness[index] == fitness[best_index]:
                 flow_direction = np.random.randint(0, row)
-                while flow_direction == index:
+                while flow_direction == index or fitness[flow_direction] == fitness[best_index]:
                     flow_direction = np.random.randint(0, row)
             else:
                 better_index = np.where(fitness > fitness[index])
@@ -83,11 +104,13 @@ def flow(pop_pos, fitness, best_index, evaluation_now):
             if new_fitness > fitness[index]:
                 pop_pos[index] = new_idv
                 fitness[index] = new_fitness
-                best_index = np.argmax(fitness)
                 flow_time += 1
             else:
                 flow_time = max_flow
             # update the control parameter
+            best_index = np.argmax(fitness)
+            best_record.append(fitness[best_index])
+            best_position.append(pop_pos[best_index])
     return evaluation_now
 
 
@@ -119,6 +142,9 @@ def infiltration(pop_pos, fitness, evaluation_now):
         if new_fitness > fitness[index]:
             pop_pos[index] = new_idv
             fitness[index] = new_fitness
+        best_index = np.argmax(fitness)
+        best_record.append(fitness[best_index])
+        best_position.append(pop_pos[best_index])
     return evaluation_now
 
 
@@ -148,6 +174,9 @@ def eva_and_precip(pop_pos, fitness, best_index, evaluation_now):
         pop_pos[index] = bndry_proce(pop_pos[index])
         fitness[index] = cal_fitness(pop_pos[index], evaluation_now)
         evaluation_now += 1
+        best_index = np.argmax(fitness)
+        best_record.append(fitness[best_index])
+        best_position.append(pop_pos[best_index])
 
         return evaluation_now
 
@@ -177,9 +206,9 @@ def sphere(idv):
 
 
 def cal_fitness(idv, evaluation_now):
-    ct.main(idv)
+    ct.main(idv)     # train
     print(evaluation_now)
-    return ce.evaluate(idv)
+    return ce.main(idv)  # eval
 
 
 if __name__ == '__main__':

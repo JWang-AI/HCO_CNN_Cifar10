@@ -48,9 +48,9 @@ import cifar10_input
 FLAGS = tf.app.flags.FLAGS
 
 # Basic model parameters.
-tf.app.flags.DEFINE_integer('batch_size', 128,
+tf.app.flags.DEFINE_integer('batch_size', 32,
                             """Number of images to process in a batch.""")
-tf.app.flags.DEFINE_string('data_dir', '/Users/wangjun/Documents/study/Graduation_Project/HCOCNN',
+tf.app.flags.DEFINE_string('data_dir', '/Users/wangjun/Documents/study/Graduation_Project/HCOCNN/Tfrecord/',
                            """Path to the CIFAR-10 data directory.""")
 tf.app.flags.DEFINE_boolean('use_fp16', False,
                             """Train the model using fp16.""")
@@ -137,6 +137,7 @@ def _variable_with_weight_decay(name, shape, stddev, wd):
         tf.add_to_collection('losses', weight_decay)
     return var
 
+
 def test_input():
     """Construct test input for CIFAR training using the Reader ops.
 
@@ -150,7 +151,7 @@ def test_input():
     if not FLAGS.data_dir:
         raise ValueError('Please supply a data_dir')
     data_dir = os.path.join(FLAGS.data_dir, 'cifar-10-batches-bin')
-    images, labels = cifar10_input.test_inputs(data_dir=data_dir,)
+    images, labels = cifar10_input.test_inputs(data_dir=data_dir, )
     if FLAGS.use_fp16:
         images = tf.cast(images, tf.float16)
         labels = tf.cast(labels, tf.float16)
@@ -169,8 +170,8 @@ def distorted_inputs():
     """
     if not FLAGS.data_dir:
         raise ValueError('Please supply a data_dir')
-    data_dir = os.path.join(FLAGS.data_dir, 'cifar-10-batches-bin')
-    images, labels = cifar10_input.distorted_inputs(data_dir=data_dir,
+    file_name = os.path.join(FLAGS.data_dir, 'train.tfrecords')
+    images, labels = cifar10_input.distorted_inputs(file_name=file_name,
                                                     batch_size=FLAGS.batch_size)
     if FLAGS.use_fp16:
         images = tf.cast(images, tf.float16)
@@ -193,9 +194,8 @@ def inputs(eval_data):
     """
     if not FLAGS.data_dir:
         raise ValueError('Please supply a data_dir')
-    data_dir = os.path.join(FLAGS.data_dir, 'cifar-10-batches-bin')
     images, labels = cifar10_input.inputs(eval_data=eval_data,
-                                          data_dir=data_dir,
+                                          data_dir=FLAGS.data_dir,
                                           batch_size=FLAGS.batch_size)
     if FLAGS.use_fp16:
         images = tf.cast(images, tf.float16)
@@ -208,7 +208,7 @@ def inference_op(images, idv):
 
        Args:
          images: Images returned from distorted_inputs() or inputs().
-
+         idv   :  the optimized super parameters
        Returns:
          Logits.
        """
@@ -218,7 +218,8 @@ def inference_op(images, idv):
     # by replacing all instances of tf.get_variable() with tf.Variable().
     #
     # idv = tf.placeholder(tf.int64, shape=(7,))
-    f_map1, f_map2, s_kernel_c_1, s_kernel_c_2, s_kernel_p_1, s_kernel_p_2, max_or_ave = idv
+    f_map1, f_map2, f_map3, s_kernel_c_1, s_kernel_c_2, s_kernel_c_3, s_kernel_p_1, s_kernel_p_2, s_kernel_p_3 \
+        , max_or_ave_1, max_or_ave_2, max_or_ave_3 = idv
     # conv1
     with tf.variable_scope('conv1') as scope:
         kernel = _variable_with_weight_decay('weights',
@@ -232,8 +233,12 @@ def inference_op(images, idv):
         _activation_summary(conv1)
 
     # pool1
-    pool1 = tf.nn.max_pool(conv1, ksize=[1, s_kernel_p_1, s_kernel_p_1, 1], strides=[1, 2, 2, 1],
-                           padding='SAME', name='pool1')
+    if max_or_ave_1 == 1:
+        pool1 = tf.nn.max_pool(conv1, ksize=[1, s_kernel_p_1, s_kernel_p_1, 1], strides=[1, 2, 2, 1],
+                               padding='SAME', name='pool1')
+    else:
+        pool1 = tf.nn.avg_pool(conv1, ksize=[1, s_kernel_p_1, s_kernel_p_1, 1], strides=[1, 2, 2, 1],
+                               padding='SAME', name='pool1')
     # norm1
     norm1 = tf.nn.lrn(pool1, 4, bias=1.0, alpha=0.001 / 9.0, beta=0.75,
                       name='norm1')
@@ -250,31 +255,58 @@ def inference_op(images, idv):
         conv2 = tf.nn.relu(pre_activation, name=scope.name)
         _activation_summary(conv2)
 
-    # norm2
-    norm2 = tf.nn.lrn(conv2, 4, bias=1.0, alpha=0.001 / 9.0, beta=0.75,
-                      name='norm2')
     # pool2
-    pool2 = tf.nn.max_pool(norm2, ksize=[1, s_kernel_p_2, s_kernel_p_2, 1],
-                           strides=[1, 2, 2, 1], padding='SAME', name='pool2')
+    if max_or_ave_2 == 1:
+        pool2 = tf.nn.max_pool(conv2, ksize=[1, s_kernel_p_2, s_kernel_p_2, 1],
+                               strides=[1, 2, 2, 1], padding='SAME', name='pool2')
+    else:
+        pool2 = tf.nn.avg_pool(conv2, ksize=[1, s_kernel_p_2, s_kernel_p_2, 1],
+                               strides=[1, 2, 2, 1], padding='SAME', name='pool2')
 
-    # local3
-    with tf.variable_scope('local3') as scope:
+    # norm2
+    norm2 = tf.nn.lrn(pool2, 4, bias=1.0, alpha=0.001 / 9.0, beta=0.75,
+                      name='norm2')
+
+    with tf.variable_scope('conv3') as scope:
+        kernel = _variable_with_weight_decay('weights',
+                                             shape=[s_kernel_c_3, s_kernel_c_3, f_map2, f_map3],
+                                             stddev=5e-2,
+                                             wd=None)
+        conv = tf.nn.conv2d(norm2, kernel, [1, 1, 1, 1], padding='SAME')
+        biases = _variable_on_cpu('biases', [f_map3], tf.constant_initializer(0.1))
+        pre_activation = tf.nn.bias_add(conv, biases)
+        conv3 = tf.nn.relu(pre_activation, name=scope.name)
+        _activation_summary(conv3)
+
+    # norm3
+    norm3 = tf.nn.lrn(conv3, 4, bias=1.0, alpha=0.001 / 9.0, beta=0.75,
+                      name='norm2')
+    # pool3
+    if max_or_ave_3 == 1:
+        pool3 = tf.nn.max_pool(norm3, ksize=[1, s_kernel_p_3, s_kernel_p_3, 1],
+                               strides=[1, 2, 2, 1], padding='SAME', name='pool2')
+    else:
+        pool3 = tf.nn.avg_pool(norm3, ksize=[1, s_kernel_p_3, s_kernel_p_3, 1],
+                               strides=[1, 2, 2, 1], padding='SAME', name='pool2')
+
+    # local4
+    with tf.variable_scope('local4') as scope:
         # Move everything into depth so we can perform a single matrix multiply.
-        reshape = tf.reshape(pool2, [images.get_shape().as_list()[0], -1])
+        reshape = tf.reshape(pool3, [images.get_shape().as_list()[0], -1])
         dim = reshape.get_shape()[1].value
         weights = _variable_with_weight_decay('weights', shape=[dim, 384],
                                               stddev=0.04, wd=0.004)
         biases = _variable_on_cpu('biases', [384], tf.constant_initializer(0.1))
-        local3 = tf.nn.relu(tf.matmul(reshape, weights) + biases, name=scope.name)
-        _activation_summary(local3)
+        local4 = tf.nn.relu(tf.matmul(reshape, weights) + biases, name=scope.name)
+        _activation_summary(local4)
 
-    # local4
-    with tf.variable_scope('local4') as scope:
+    # local5
+    with tf.variable_scope('local5') as scope:
         weights = _variable_with_weight_decay('weights', shape=[384, 192],
                                               stddev=0.04, wd=0.004)
         biases = _variable_on_cpu('biases', [192], tf.constant_initializer(0.1))
-        local4 = tf.nn.relu(tf.matmul(local3, weights) + biases, name=scope.name)
-        _activation_summary(local4)
+        local5 = tf.nn.relu(tf.matmul(local4, weights) + biases, name=scope.name)
+        _activation_summary(local5)
 
     # linear layer(WX + b),
     # We don't apply softmax here because
@@ -285,7 +317,7 @@ def inference_op(images, idv):
                                               stddev=1 / 192.0, wd=None)
         biases = _variable_on_cpu('biases', [NUM_CLASSES],
                                   tf.constant_initializer(0.0))
-        softmax_linear = tf.add(tf.matmul(local4, weights), biases, name=scope.name)
+        softmax_linear = tf.add(tf.matmul(local5, weights), biases, name=scope.name)
         _activation_summary(softmax_linear)
 
     return softmax_linear
@@ -487,8 +519,7 @@ def maybe_download_and_extract():
     dest_directory = FLAGS.data_dir
     if not os.path.exists(dest_directory):
         os.makedirs(dest_directory)
-    filename = DATA_URL.split('/')[-1]
-    filepath = os.path.join(dest_directory, filename)
+    filepath = os.path.join(dest_directory, 'train.tfrecords')
     if not os.path.exists(filepath):
         def _progress(count, block_size, total_size):
             sys.stdout.write('\r>> Downloading %s %.1f%%' % (filename,
@@ -499,6 +530,3 @@ def maybe_download_and_extract():
         print()
         statinfo = os.stat(filepath)
         print('Successfully downloaded', filename, statinfo.st_size, 'bytes.')
-    extracted_dir_path = os.path.join(dest_directory, 'cifar-10-batches-bin')
-    if not os.path.exists(extracted_dir_path):
-        tarfile.open(filepath, 'r:gz').extractall(dest_directory)
